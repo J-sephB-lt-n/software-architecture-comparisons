@@ -2,13 +2,11 @@
 
 import logging
 import sqlite3
-from pathlib import Path
 
+from constants import DB_FILEPATH
 from db import db_conn
 
 logger: logging.Logger = logging.getLogger(__name__)
-
-DB_FILEPATH: Path = Path("./app_data.sqlite3")
 
 
 def create_users_table(conn: sqlite3.Connection) -> None:
@@ -49,7 +47,7 @@ def create_user_login_status_table(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
         CREATE TABLE user_login_status (
-                user_id             INTEGER NOT NULL
+                user_id             INTEGER PRIMARY KEY
             ,   status              TEXT NOT NULL CHECK(status IN ('LOGGED_IN'))
             ,   status_updated_at   TEXT NOT NULL
             ,   FOREIGN KEY (user_id) REFERENCES users(user_id)

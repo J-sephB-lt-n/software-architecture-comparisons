@@ -1,11 +1,15 @@
 """Entrypoint script of the shop application."""
 
 import argparse
+import logging
 import sqlite3
 from collections.abc import Callable
-from pathlib import Path
+from logging import getLogger, Logger
 
+from constants import DB_FILEPATH
 from db import db_conn
+
+logger: Logger = getLogger(__name__)
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -38,51 +42,51 @@ def main():
     args = arg_parser.parse_args()
     func: Callable = args.func
     kwargs: dict = {
-        k: v for k, v in vars(args).items() if k not in ("cmd", "auth_cmd", "func")
+        k: v
+        for k, v in vars(args).items()
+        if k not in ("cmd", "auth_cmd", "func", "products_cmd")
     }
     func(**kwargs)
 
 
 def log_in_user(username: str, password: str) -> bool:
     """Authenticate a user against the database.
-    
+
     Args:
-        username: The username to authenticate
-        password: The password to verify
-        
+        username (str): The username to authenticate
+        password (str): The password to verify
+
     Returns:
         True if authentication successful, False otherwise
     """
-    db_path = Path("./app_data.sqlite3")
-    
-    if not db_path.exists():
-        print("Error: Database not found. Please run init_app_data.py first.")
-        return False
-    
-    try:
-        with db_conn(db_path) as conn:
-            cursor = conn.execute(
-                "SELECT user_id, username, password FROM users WHERE username = ?",
-                (username,)
-            )
-            user = cursor.fetchone()
-            
-            if user is None:
-                print(f"Error: User '{username}' not found.")
-                return False
-            
-            # In a real application, you would use proper password hashing
-            # (e.g., bcrypt, argon2) instead of storing plaintext passwords
-            if user["password"] != password:
-                print("Error: Incorrect password.")
-                return False
-            
-            print(f"Successfully logged in as '{username}'.")
-            return True
-            
-    except sqlite3.Error as e:
-        print(f"Database error: {e}")
-        return False
+    with db_conn(DB_FILEPATH) as conn:
+        cursor: sqlite3.Cursor = conn.execute(
+            "SELECT user_id, username, password FROM users WHERE username = ?",
+            (username,),
+        )
+        user: sqlite3.Row | None = cursor.fetchone()
+
+        if user is None or user["password"] != password:
+            logger.info("User '%s' failed to log in.", username)
+            return False
+
+        user_id: int = user["user_id"]
+
+        # Use UPSERT to avoid race conditions
+        conn.execute(
+            """
+            INSERT INTO user_login_status (user_id, status, status_updated_at)
+            VALUES (?, 'LOGGED_IN', datetime('now'))
+            ON CONFLICT(user_id) 
+            DO UPDATE SET 
+                status = 'LOGGED_IN', 
+                status_updated_at = datetime('now')
+            """,
+            (user_id,),
+        )
+
+        logger.info("User %s successfully logged in.", username)
+        return True
 
 
 def log_out_user() -> bool:
@@ -92,4 +96,5 @@ def log_out_user() -> bool:
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     main()
