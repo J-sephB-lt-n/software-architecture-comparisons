@@ -57,6 +57,42 @@ def create_user_login_status_table(conn: sqlite3.Connection) -> None:
     logger.info("Created `user_login_status` table.")
 
 
+def create_products_table(conn: sqlite3.Connection) -> None:
+    """
+    Create the `products` table, which contains a list of all
+    unique products and their metdata.
+    """
+    conn.execute(
+        """
+        CREATE TABLE products (
+                product_id      INTEGER PRIMARY KEY AUTOINCREMENT
+            ,   name            TEXT NOT NULL
+            ,   description     TEXT
+            ,   price_cents     INTEGER NOT NULL CHECK (price_cents >= 0)
+            ,   is_active       INTEGER NOT NULL DEFAULT 1 CHECK(is_active in (0,1))
+        )
+        """
+    )
+    logger.info("Created `products` table.")
+
+
+def populate_products_table(conn: sqlite3.Connection) -> None:
+    """Add some actual products into the `products` table."""
+    products: list[tuple] = [
+        ("Classic T-Shirt", "Unisex cotton t-shirt", 1999),
+        ("Coffee Mug", "Ceramic mug 350ml", 1299),
+        ("Zip Hoodie", "Fleece-lined zip hoodie", 4999),
+    ]
+    conn.executemany(
+        """
+        INSERT INTO products (name, description, price_cents)
+        VALUES (?, ?, ?)
+        """,
+        products,
+    )
+    logger.info("Added %s products to the `products` table.", len(products))
+
+
 def db_setup() -> None:
     """Create the database and tables used by the app."""
     if DB_FILEPATH.exists():
@@ -67,6 +103,8 @@ def db_setup() -> None:
         create_users_table(conn)
         populate_users_table(conn)
         create_user_login_status_table(conn)
+        create_products_table(conn)
+        populate_products_table(conn)
 
 
 if __name__ == "__main__":
