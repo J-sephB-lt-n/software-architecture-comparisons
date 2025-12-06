@@ -32,8 +32,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     products_subparsers = products_parser.add_subparsers(
         dest="products_cmd", required=True
     )
-    products_list = products_subparsers.add_parser("list")
-    products_view = products_subparsers.add_parser("view")
+    products_list = products_subparsers.add_parser("list", help="List all products")
+    products_list.set_defaults(func=list_products)
+
+    products_view = products_subparsers.add_parser(
+        "view", help="View a specific product"
+    )
+    products_view.add_argument("--product_id", required=True, type=int)
+    products_view.set_defaults(func=view_product)
 
     return arg_parser
 
@@ -113,6 +119,52 @@ def log_out_user(username: str) -> bool:
         print(f"User {username} successfully logged out.")
 
         return True
+
+
+def list_products() -> None:
+    """List all active products, showing product_id and name for each."""
+    with db_conn(DB_FILEPATH) as conn:
+        cursor: sqlite3.Cursor = conn.execute(
+            "SELECT product_id, name FROM products WHERE is_active = 1 ORDER BY product_id"
+        )
+        products: list[sqlite3.Row] = cursor.fetchall()
+
+        if not products:
+            print("No products available.")
+            return
+
+        print("\nAvailable Products:")
+        print("-" * 50)
+        for product in products:
+            print(f"ID: {product['product_id']:<5} Name: {product['name']}")
+        print("-" * 50)
+
+
+def view_product(product_id: int) -> None:
+    """View detailed information for a specific product.
+
+    Args:
+        product_id (int): The ID of the product to view
+    """
+    with db_conn(DB_FILEPATH) as conn:
+        cursor: sqlite3.Cursor = conn.execute(
+            "SELECT * FROM products WHERE product_id = ?",
+            (product_id,),
+        )
+        product: sqlite3.Row | None = cursor.fetchone()
+
+        if product is None:
+            print(f"Product with ID {product_id} not found.")
+            return
+
+        print("\nProduct Details:")
+        print("=" * 50)
+        print(f"Product ID:   {product['product_id']}")
+        print(f"Name:         {product['name']}")
+        print(f"Description:  {product['description']}")
+        print(f"Price:        ${product['price_cents'] / 100:.2f}")
+        print(f"Active:       {'Yes' if product['is_active'] else 'No'}")
+        print("=" * 50)
 
 
 if __name__ == "__main__":
