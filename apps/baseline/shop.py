@@ -1,7 +1,11 @@
 """Entrypoint script of the shop application."""
 
 import argparse
+import sqlite3
 from collections.abc import Callable
+from pathlib import Path
+
+from db import db_conn
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -40,9 +44,45 @@ def main():
 
 
 def log_in_user(username: str, password: str) -> bool:
-    """TODO"""
-    print(f"logged in '{username}' with password '{password}'")
-    return True
+    """Authenticate a user against the database.
+    
+    Args:
+        username: The username to authenticate
+        password: The password to verify
+        
+    Returns:
+        True if authentication successful, False otherwise
+    """
+    db_path = Path("./app_data.sqlite3")
+    
+    if not db_path.exists():
+        print("Error: Database not found. Please run init_app_data.py first.")
+        return False
+    
+    try:
+        with db_conn(db_path) as conn:
+            cursor = conn.execute(
+                "SELECT user_id, username, password FROM users WHERE username = ?",
+                (username,)
+            )
+            user = cursor.fetchone()
+            
+            if user is None:
+                print(f"Error: User '{username}' not found.")
+                return False
+            
+            # In a real application, you would use proper password hashing
+            # (e.g., bcrypt, argon2) instead of storing plaintext passwords
+            if user["password"] != password:
+                print("Error: Incorrect password.")
+                return False
+            
+            print(f"Successfully logged in as '{username}'.")
+            return True
+            
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        return False
 
 
 def log_out_user() -> bool:

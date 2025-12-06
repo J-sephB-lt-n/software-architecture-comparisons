@@ -2,30 +2,13 @@
 
 import logging
 import sqlite3
-from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
+
+from db import db_conn
 
 logger: logging.Logger = logging.getLogger(__name__)
 
 DB_FILEPATH: Path = Path("./app_data.sqlite3")
-
-
-@contextmanager
-def db_conn(db_path: Path) -> Iterator[sqlite3.Connection]:
-    """Context manager that yields a SQLite connection with sensible defaults."""
-    conn: sqlite3.Connection = sqlite3.connect(db_path)
-    try:
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON;")
-        yield conn
-        conn.commit()
-    except Exception:
-        logger.exception("Database error - rolling back transaction")
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
 
 
 def create_users_table(conn: sqlite3.Connection) -> None:
@@ -58,8 +41,26 @@ def populate_users_table(conn: sqlite3.Connection) -> None:
     logger.info("Added %s users to the `users` table", len(new_users))
 
 
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+def create_user_login_status_table(conn: sqlite3.Connection) -> None:
+    """
+    Create the `user_login_status` table, which records which users are
+    logged in.
+    """
+    conn.execute(
+        """
+        CREATE TABLE user_login_status (
+                user_id             INTEGER NOT NULL
+            ,   status              TEXT NOT NULL CHECK(status IN ('LOGGED_IN'))
+            ,   status_updated_at   TEXT NOT NULL
+            ,   FOREIGN KEY (user_id) REFERENCES users(user_id)
+        )
+        """
+    )
+    logger.info("Created `user_login_status` table.")
+
+
+def db_setup() -> None:
+    """Create the database and tables used by the app."""
     if DB_FILEPATH.exists():
         DB_FILEPATH.unlink()
         logger.warning("Deleted existing database at %s", DB_FILEPATH)
@@ -67,3 +68,10 @@ if __name__ == "__main__":
     with db_conn(DB_FILEPATH) as conn:
         create_users_table(conn)
         populate_users_table(conn)
+        create_user_login_status_table(conn)
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+    db_setup()
+    logging.info("Database creation complete.")
