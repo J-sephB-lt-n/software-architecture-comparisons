@@ -25,6 +25,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     auth_login.set_defaults(func=log_in_user)
 
     auth_logout = auth_subparsers.add_parser("logout", help="Log out of the app")
+    auth_logout.add_argument("--username", required=True)
     auth_logout.set_defaults(func=log_out_user)
 
     products_parser = subparsers.add_parser("products", help="Product commands")
@@ -89,10 +90,33 @@ def log_in_user(username: str, password: str) -> bool:
         return True
 
 
-def log_out_user() -> bool:
-    """TODO."""
-    print("logged out user")
-    return True
+def log_out_user(username: str) -> bool:
+    """Log out a user by removing their login status.
+
+    Args:
+        username (str): The username to log out
+
+    Returns:
+        bool: Always returns True to prevent username enumeration
+    """
+    with db_conn(DB_FILEPATH) as conn:
+        # Use atomic DELETE with JOIN to avoid race conditions
+        cursor: sqlite3.Cursor = conn.execute(
+            """
+            DELETE FROM user_login_status 
+            WHERE user_id IN (
+                SELECT user_id FROM users WHERE username = ?
+            )
+            """,
+            (username,),
+        )
+
+        if cursor.rowcount > 0:
+            logger.info("User '%s' successfully logged out.", username)
+        else:
+            logger.info("Logout attempt for username '%s' (no action taken).", username)
+
+        return True
 
 
 if __name__ == "__main__":
