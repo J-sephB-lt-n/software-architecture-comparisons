@@ -68,7 +68,7 @@ def log_in_user(username: str, password: str) -> bool:
         user: sqlite3.Row | None = cursor.fetchone()
 
         if user is None or user["password"] != password:
-            logger.info("User '%s' failed to log in.", username)
+            print("LOGIN FAILED: username or password is incorrect or does not exist.")
             return False
 
         user_id: int = user["user_id"]
@@ -86,7 +86,7 @@ def log_in_user(username: str, password: str) -> bool:
             (user_id,),
         )
 
-        logger.info("User %s successfully logged in.", username)
+        print("Logged in successfully.")
         return True
 
 
@@ -100,8 +100,7 @@ def log_out_user(username: str) -> bool:
         bool: Always returns True to prevent username enumeration
     """
     with db_conn(DB_FILEPATH) as conn:
-        # Use atomic DELETE with JOIN to avoid race conditions
-        cursor: sqlite3.Cursor = conn.execute(
+        _: sqlite3.Cursor = conn.execute(
             """
             DELETE FROM user_login_status 
             WHERE user_id IN (
@@ -111,10 +110,7 @@ def log_out_user(username: str) -> bool:
             (username,),
         )
 
-        if cursor.rowcount > 0:
-            logger.info("User '%s' successfully logged out.", username)
-        else:
-            logger.info("Logout attempt for username '%s' (no action taken).", username)
+        print(f"User {username} successfully logged out.")
 
         return True
 
