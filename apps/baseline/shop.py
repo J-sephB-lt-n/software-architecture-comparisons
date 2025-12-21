@@ -5,8 +5,9 @@ import logging
 import sqlite3
 from collections.abc import Callable
 from logging import getLogger, Logger
+from uuid import UUID, uuid4
 
-from constants import DB_FILEPATH
+from constants import AUTH_LOCAL_SESSION_FILEPATH, DB_FILEPATH
 from db import db_conn
 
 logger: Logger = getLogger(__name__)
@@ -25,7 +26,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
     auth_login.set_defaults(func=log_in_user)
 
     auth_logout = auth_subparsers.add_parser("logout", help="Log out of the app")
-    auth_logout.add_argument("--username", required=True)
     auth_logout.set_defaults(func=log_out_user)
 
     products_parser = subparsers.add_parser("products", help="Product commands")
@@ -57,7 +57,8 @@ def main():
 
 
 def log_in_user(username: str, password: str) -> bool:
-    """Authenticate a user against the database.
+    """Create a login session for a user.
+    On successful login, creates a local .tmp_auth file (e.g. like a browser cookie)
 
     Args:
         username (str): The username to authenticate
@@ -78,47 +79,73 @@ def log_in_user(username: str, password: str) -> bool:
             return False
 
         user_id: int = user["user_id"]
+        session_token_uuid: UUID = uuid4()
 
-        # Use UPSERT to avoid race conditions
+        # Use UPSERT to avoid race conditions #
         conn.execute(
             """
-            INSERT INTO user_login_status (user_id, status, status_updated_at)
-            VALUES (?, 'LOGGED_IN', datetime('now'))
+            INSERT INTO user_login_status (user_id, status, status_updated_at, auth_token)
+            VALUES (?, 'LOGGED_IN', datetime('now'), ?)
             ON CONFLICT(user_id) 
             DO UPDATE SET 
                 status = 'LOGGED_IN', 
-                status_updated_at = datetime('now')
+                status_updated_at = datetime('now'),
+                auth_token = excluded.auth_token
             """,
-            (user_id,),
+            (user_id, str(session_token_uuid)),
         )
+
+        with open(AUTH_LOCAL_SESSION_FILEPATH, "w", encoding="utf-8") as file:
+            file.write(str(session_token_uuid))
 
         print("Logged in successfully.")
         return True
 
 
-def log_out_user(username: str) -> bool:
-    """Log out a user by removing their login status.
-
-    Args:
-        username (str): The username to log out
+def log_out_user() -> bool:
+    """Log out a user by deleting their local session.
 
     Returns:
         bool: Always returns True to prevent username enumeration
     """
-    with db_conn(DB_FILEPATH) as conn:
-        _: sqlite3.Cursor = conn.execute(
-            """
-            DELETE FROM user_login_status 
-            WHERE user_id IN (
-                SELECT user_id FROM users WHERE username = ?
+    user_id: int | None = get_logged_in_user_id()
+
+    AUTH_LOCAL_SESSION_FILEPATH.unlink(missing_ok=True)
+
+    if user_id:
+        with db_conn(DB_FILEPATH) as conn:
+            _: sqlite3.Cursor = conn.execute(
+                """
+                DELETE FROM user_login_status 
+                WHERE user_id = ?                
+                """,
+                (user_id,),
             )
-            """,
-            (username,),
+
+    print("Successfully logged out.")
+
+    return True
+
+
+def get_logged_in_user_id() -> int | None:
+    """If there is a valid local session, return the logged in user_id, otherwise None."""
+    if not AUTH_LOCAL_SESSION_FILEPATH.exists():
+        return None
+
+    with open(AUTH_LOCAL_SESSION_FILEPATH, "r", encoding="utf-8") as file:
+        session_token: str = file.read().strip()
+
+    if not session_token:
+        return None
+
+    with db_conn(DB_FILEPATH) as conn:
+        cursor: sqlite3.Cursor = conn.execute(
+            "SELECT user_id FROM user_login_status WHERE auth_token = ? AND status = 'LOGGED_IN'",
+            (session_token,),
         )
+        row: sqlite3.Row | None = cursor.fetchone()
 
-        print(f"User {username} successfully logged out.")
-
-        return True
+        return row["user_id"] if row else None
 
 
 def list_products() -> None:

@@ -50,6 +50,7 @@ def create_user_login_status_table(conn: sqlite3.Connection) -> None:
                 user_id             INTEGER PRIMARY KEY
             ,   status              TEXT NOT NULL CHECK(status IN ('LOGGED_IN'))
             ,   status_updated_at   TEXT NOT NULL
+            ,   auth_token          TEXT 
             ,   FOREIGN KEY (user_id) REFERENCES users(user_id)
         )
         """
