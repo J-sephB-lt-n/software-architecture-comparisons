@@ -41,6 +41,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
     products_view.add_argument("--product_id", required=True, type=int)
     products_view.set_defaults(func=view_product)
 
+    cart_parser = subparsers.add_parser(
+        "cart", help="Manage items in current active user cart."
+    )
+    cart_subparsers = cart_parser.add_subparsers(dest="cart_cmd", required=True)
+    cart_add = cart_subparsers.add_parser(
+        "add",
+        help="Add n items of a specific product_id to the logged in user's active cart.",
+    )
+    cart_add.add_argument("--product_id", required=True, type=int)
+    cart_add.add_argument("--quantity", required=True, type=int)
+    cart_add.set_defaults(func=add_item_to_cart)
+
     return arg_parser
 
 
@@ -51,7 +63,7 @@ def main():
     kwargs: dict = {
         k: v
         for k, v in vars(args).items()
-        if k not in ("cmd", "auth_cmd", "func", "products_cmd")
+        if k not in ("cmd", "auth_cmd", "func", "products_cmd", "cart_cmd")
     }
     func(**kwargs)
 
@@ -156,10 +168,6 @@ def list_products() -> None:
         )
         products: list[sqlite3.Row] = cursor.fetchall()
 
-        if not products:
-            print("No products available.")
-            return
-
         print("\nAvailable Products:")
         print("-" * 50)
         for product in products:
@@ -192,6 +200,46 @@ def view_product(product_id: int) -> None:
         print(f"Price:        ${product['price_cents'] / 100:.2f}")
         print(f"Active:       {'Yes' if product['is_active'] else 'No'}")
         print("=" * 50)
+
+
+def add_item_to_cart(product_id: int, quantity: int) -> None:
+    """Add `quantity` items of product `product_id` into the logged in user's cart."""
+    if (user_id := get_logged_in_user_id()) is None:
+        print("WARNING: Cannot add item to cart. REASON: User is not logged in.")
+        return
+
+    with db_conn(DB_FILEPATH) as conn:
+        cursor: sqlite3.Cursor = conn.execute(
+            """
+            INSERT INTO active_carts (user_id, product_id, quantity)
+            SELECT ?, ?, ?
+            WHERE EXISTS (SELECT 1 FROM products where product_id = ? and is_active=1)
+            ON CONFLICT (user_id, product_id) DO UPDATE
+                SET quantity = quantity + excluded.quantity
+            """,
+            (user_id, product_id, quantity, product_id),
+        )
+
+        if cursor.rowcount == 0:
+            print(f"WARNING: product_id='{product_id}' is inactive or does not exist.")
+        else:
+            print(
+                f"SUCCESS: added {quantity} items of product_id='{product_id}'",
+                f"to cart of user_id='{user_id}'",
+            )
+
+        # TODO: this logic is broken #
+        result = cursor.fetchone()
+        if result:
+            updated_quantity = result["quantity"]
+        else:
+            updated_quantity = 0
+        print(
+            f"Current quantity of product_id='{product_id}' is {updated_quantity}",
+            f"in active cart of user_id='{user_id}'",
+        )
+
+        return
 
 
 if __name__ == "__main__":

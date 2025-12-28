@@ -94,6 +94,25 @@ def populate_products_table(conn: sqlite3.Connection) -> None:
     logger.info("Added %s products to the `products` table.", len(products))
 
 
+def create_active_carts_table(conn: sqlite3.Connection) -> None:
+    """Create the `active_carts` table, which lists the items in every users current cart."""
+    conn.execute(
+        """
+        CREATE TABLE active_carts (
+                user_id         INTEGER NOT NULL
+            ,   product_id      INTEGER NOT NULL
+            ,   quantity        INTEGER NOT NULL CHECK(quantity > 0)
+
+            ,   PRIMARY KEY (user_id, product_id)
+
+            ,   FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+            ,   FOREIGN KEY (product_id) REFERENCES products(product_id)
+        )
+        """
+    )
+    logger.info("Created `active_carts` table.")
+
+
 def db_setup() -> None:
     """Create the database and tables used by the app."""
     if DB_FILEPATH.exists():
@@ -101,11 +120,17 @@ def db_setup() -> None:
         logger.warning("Deleted existing database at %s", DB_FILEPATH)
 
     with db_conn(DB_FILEPATH) as conn:
+        conn.execute(
+            """
+            PRAGMA foreign_keys = ON;
+            """
+        )
         create_users_table(conn)
         populate_users_table(conn)
         create_user_login_status_table(conn)
         create_products_table(conn)
         populate_products_table(conn)
+        create_active_carts_table(conn)
 
 
 if __name__ == "__main__":
