@@ -52,6 +52,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     cart_add.add_argument("--product-id", required=True, type=int)
     cart_add.add_argument("--quantity", required=True, type=int)
     cart_add.set_defaults(func=add_item_to_cart)
+    cart_remove = cart_subparsers.add_parser(
+        "remove",
+        help="Remove all items of --product-id from the logged in user's active cart.",
+    )
+    cart_remove.add_argument("--product-id", required=True, type=int)
+    cart_remove.set_defaults(func=remove_item_from_cart)
 
     return arg_parser
 
@@ -245,6 +251,36 @@ def add_item_to_cart(product_id: int, quantity: int) -> None:
         )
 
         return
+
+
+def remove_item_from_cart(product_id: int) -> None:
+    """Remove all items of `product_id` from cart of current logged in user."""
+    if (user_id := _get_logged_in_user_id()) is None:
+        print("WARNING: Cannot remove items from cart. REASON: User is not logged in.")
+        return
+
+    with db_conn(DB_FILEPATH) as conn:
+        cursor: sqlite3.Cursor = conn.execute(
+            """
+            DELETE FROM active_carts
+            WHERE   user_id = :user_id
+                AND product_id = :product_id
+            """,
+            {
+                "user_id": user_id,
+                "product_id": product_id,
+            },
+        )
+
+        if cursor.rowcount > 0:
+            print(
+                f"Removed all items of product_id={product_id} from cart of user_id={user_id}"
+            )
+        else:
+            print(
+                f"No instances of item product_id={product_id} to remove from",
+                f"cart of user_id={user_id}",
+            )
 
 
 if __name__ == "__main__":
