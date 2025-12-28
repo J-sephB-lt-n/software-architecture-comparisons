@@ -38,7 +38,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     products_view = products_subparsers.add_parser(
         "view", help="View a specific product"
     )
-    products_view.add_argument("--product_id", required=True, type=int)
+    products_view.add_argument("--product-id", required=True, type=int)
     products_view.set_defaults(func=view_product)
 
     cart_parser = subparsers.add_parser(
@@ -49,7 +49,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "add",
         help="Add n items of a specific product_id to the logged in user's active cart.",
     )
-    cart_add.add_argument("--product_id", required=True, type=int)
+    cart_add.add_argument("--product-id", required=True, type=int)
     cart_add.add_argument("--quantity", required=True, type=int)
     cart_add.set_defaults(func=add_item_to_cart)
 
@@ -120,7 +120,7 @@ def log_out_user() -> bool:
     Returns:
         bool: Always returns True to prevent username enumeration
     """
-    user_id: int | None = get_logged_in_user_id()
+    user_id: int | None = _get_logged_in_user_id()
 
     AUTH_LOCAL_SESSION_FILEPATH.unlink(missing_ok=True)
 
@@ -139,7 +139,7 @@ def log_out_user() -> bool:
     return True
 
 
-def get_logged_in_user_id() -> int | None:
+def _get_logged_in_user_id() -> int | None:
     """If there is a valid local session, return the logged in user_id, otherwise None."""
     if not AUTH_LOCAL_SESSION_FILEPATH.exists():
         return None
@@ -204,7 +204,7 @@ def view_product(product_id: int) -> None:
 
 def add_item_to_cart(product_id: int, quantity: int) -> None:
     """Add `quantity` items of product `product_id` into the logged in user's cart."""
-    if (user_id := get_logged_in_user_id()) is None:
+    if (user_id := _get_logged_in_user_id()) is None:
         print("WARNING: Cannot add item to cart. REASON: User is not logged in.")
         return
 
@@ -212,31 +212,36 @@ def add_item_to_cart(product_id: int, quantity: int) -> None:
         cursor: sqlite3.Cursor = conn.execute(
             """
             INSERT INTO active_carts (user_id, product_id, quantity)
-            SELECT ?, ?, ?
-            WHERE EXISTS (SELECT 1 FROM products where product_id = ? and is_active=1)
+            SELECT :user_id, :product_id, :quantity
+            WHERE EXISTS (SELECT 1 FROM products where product_id = :product_id and is_active=1)
+            AND EXISTS (SELECT 1 FROM users where user_id = :user_id)
             ON CONFLICT (user_id, product_id) DO UPDATE
                 SET quantity = quantity + excluded.quantity
+            RETURNING   user_id, product_id, quantity
             """,
-            (user_id, product_id, quantity, product_id),
+            {
+                "user_id": user_id,
+                "product_id": product_id,
+                "quantity": quantity,
+            },
         )
+        result: sqlite3.Row | None = cursor.fetchone()
 
         if cursor.rowcount == 0:
             print(f"WARNING: product_id='{product_id}' is inactive or does not exist.")
         else:
             print(
-                f"SUCCESS: added {quantity} items of product_id='{product_id}'",
-                f"to cart of user_id='{user_id}'",
+                f"SUCCESS: added {quantity} items of product_id={product_id}",
+                f"to cart of user_id={user_id}",
             )
 
-        # TODO: this logic is broken #
-        result = cursor.fetchone()
-        if result:
+        if result is not None:
             updated_quantity = result["quantity"]
         else:
             updated_quantity = 0
         print(
-            f"Current quantity of product_id='{product_id}' is {updated_quantity}",
-            f"in active cart of user_id='{user_id}'",
+            f"Current quantity of product_id={product_id} is {updated_quantity}",
+            f"in active cart of user_id={user_id}",
         )
 
         return
