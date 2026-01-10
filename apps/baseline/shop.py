@@ -58,6 +58,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     cart_remove.add_argument("--product-id", required=True, type=int)
     cart_remove.set_defaults(func=remove_item_from_cart)
+    cart_update = cart_subparsers.add_parser(
+        "update",
+        help="Update quantity of item --product-id in logged in user's active cart.",
+    )
+    cart_update.add_argument("--product-id", required=True, type=int)
+    cart_update.add_argument("--quantity", required=True, type=int)
+    cart_update.set_defaults(func=update_item_in_cart)
 
     return arg_parser
 
@@ -278,8 +285,51 @@ def remove_item_from_cart(product_id: int) -> None:
             )
         else:
             print(
-                f"No instances of item product_id={product_id} to remove from",
+                f"WARNING: No instances of item product_id={product_id} to remove from",
                 f"cart of user_id={user_id}",
+            )
+
+
+def update_item_in_cart(product_id: int, quantity: int) -> None:
+    """Change quantity of items of `product_id` in cart of current logged in user."""
+    if (user_id := _get_logged_in_user_id()) is None:
+        print(
+            "WARNING: Cannot update item quantity in cart. REASON: User is not logged in."
+        )
+        return
+
+    if quantity < 1:
+        print("WARNING: Cannot update item quantity to less than 1 item.")
+        return
+
+    with db_conn(DB_FILEPATH) as conn:
+        cursor: sqlite3.Cursor = conn.execute(
+            """
+            UPDATE      active_carts
+            SET         quantity = :quantity
+            WHERE       user_id = :user_id
+            AND         product_id = :product_id
+            RETURNING   quantity
+            ;
+            """,
+            {
+                "user_id": user_id,
+                "product_id": product_id,
+                "quantity": quantity,
+            },
+        )
+
+        row = cursor.fetchone()
+
+        if row is None:
+            print(
+                f"WARNING: No instances of item product_id={product_id}",
+                f"in cart of user_id={user_id}",
+            )
+        else:
+            print(
+                f"Updated quantity of product_id={product_id} to {row[0]} items",
+                f"in cart of user_id={user_id}",
             )
 
 
