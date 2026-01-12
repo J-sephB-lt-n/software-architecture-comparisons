@@ -71,10 +71,6 @@ def create_products_table(conn: sqlite3.Connection) -> None:
             ,   description     TEXT
             ,   price_cents     INTEGER NOT NULL CHECK (price_cents >= 0)
             ,   is_active       INTEGER NOT NULL DEFAULT 1 CHECK(is_active in (0,1))
-            ,   max_discount_percent    FLOAT NOT NULL CHECK (
-                                            max_discount_percent >= 0.0
-                                            AND max_discount_percent <= 1.0
-                                        )
         )
         """
     )
@@ -84,14 +80,14 @@ def create_products_table(conn: sqlite3.Connection) -> None:
 def populate_products_table(conn: sqlite3.Connection) -> None:
     """Add some actual products into the `products` table."""
     products: list[tuple] = [
-        ("Classic T-Shirt", "Unisex cotton t-shirt", 1999, 0.2),
-        ("Coffee Mug", "Ceramic mug 350ml", 1299, 0.5),
-        ("Zip Hoodie", "Fleece-lined zip hoodie", 4999, 0.0),
+        ("Classic T-Shirt", "Unisex cotton t-shirt", 1999),
+        ("Coffee Mug", "Ceramic mug 350ml", 1299),
+        ("Zip Hoodie", "Fleece-lined zip hoodie", 4999),
     ]
     conn.executemany(
         """
-        INSERT INTO products (name, description, price_cents, max_discount_percent)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO products (name, description, price_cents)
+        VALUES (?, ?, ?)
         """,
         products,
     )
@@ -103,9 +99,9 @@ def create_active_carts_table(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
         CREATE TABLE active_carts (
-                user_id         INTEGER NOT NULL
-            ,   product_id      INTEGER NOT NULL
-            ,   quantity        INTEGER NOT NULL CHECK(quantity > 0)
+                user_id             INTEGER NOT NULL
+            ,   product_id          INTEGER NOT NULL
+            ,   quantity            INTEGER NOT NULL CHECK(quantity > 0)
 
             ,   PRIMARY KEY (user_id, product_id)
 
@@ -115,6 +111,43 @@ def create_active_carts_table(conn: sqlite3.Connection) -> None:
         """
     )
     logger.info("Created `active_carts` table.")
+
+
+def create_discount_vouchers_table(conn: sqlite3.Connection) -> None:
+    """
+    Create the `discount_vouchers` table, which contains a list of active
+    discount vouchers, and which customers they belong to.
+    """
+    conn.execute(
+        """
+        CREATE TABLE discount_vouchers (
+                voucher_id  INTEGER PRIMARY KEY AUTOINCREMENT
+            ,   user_id     INTEGER NOT NULL
+            ,   discount_percent FLOAT CHECK(
+                        discount_percent >= 0.0
+                    AND discount_percent <= 1.0
+                )
+            ,   is_valid    BOOLEAN
+        )
+        """
+    )
+    logger.info("Created `discount_vouchers` table.")
+
+
+def populate_discount_vouchers_table(conn: sqlite3.Connection) -> None:
+    """Add some actual vouchers into the `discount_vouchers` table."""
+    vouchers: list[tuple] = [
+        (1, 0.05, True),
+        (1, 0.3, True),
+    ]
+    conn.executemany(
+        """
+        INSERT INTO discount_vouchers(user_id, discount_percent, is_valid)
+        VALUES (?, ?, ?)
+        """,
+        vouchers,
+    )
+    logger.info("Added %s vouchers into the `discount_vouchers` table.", len(vouchers))
 
 
 def db_setup() -> None:
@@ -135,6 +168,7 @@ def db_setup() -> None:
         create_products_table(conn)
         populate_products_table(conn)
         create_active_carts_table(conn)
+        create_discount_vouchers_table(conn)
 
 
 if __name__ == "__main__":
