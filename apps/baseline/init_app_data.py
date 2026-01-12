@@ -71,6 +71,10 @@ def create_products_table(conn: sqlite3.Connection) -> None:
             ,   description     TEXT
             ,   price_cents     INTEGER NOT NULL CHECK (price_cents >= 0)
             ,   is_active       INTEGER NOT NULL DEFAULT 1 CHECK(is_active in (0,1))
+            ,   max_discount_percent    FLOAT NOT NULL CHECK (
+                                            max_discount_percent >= 0.0
+                                            AND max_discount_percent <= 1.0
+                                        )
         )
         """
     )
@@ -80,14 +84,14 @@ def create_products_table(conn: sqlite3.Connection) -> None:
 def populate_products_table(conn: sqlite3.Connection) -> None:
     """Add some actual products into the `products` table."""
     products: list[tuple] = [
-        ("Classic T-Shirt", "Unisex cotton t-shirt", 1999),
-        ("Coffee Mug", "Ceramic mug 350ml", 1299),
-        ("Zip Hoodie", "Fleece-lined zip hoodie", 4999),
+        ("Classic T-Shirt", "Unisex cotton t-shirt", 1999, 0.2),
+        ("Coffee Mug", "Ceramic mug 350ml", 1299, 0.5),
+        ("Zip Hoodie", "Fleece-lined zip hoodie", 4999, 0.0),
     ]
     conn.executemany(
         """
-        INSERT INTO products (name, description, price_cents)
-        VALUES (?, ?, ?)
+        INSERT INTO products (name, description, price_cents, max_discount_percent)
+        VALUES (?, ?, ?, ?)
         """,
         products,
     )
