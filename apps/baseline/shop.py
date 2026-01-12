@@ -66,6 +66,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
     cart_update.add_argument("--quantity", required=True, type=int)
     cart_update.set_defaults(func=update_item_in_cart)
 
+    cart_discount = cart_subparsers.add_parser(
+        "discount", help="Manage discount vouchers"
+    )
+    cart_discount_subparsers = cart_discount.add_subparsers(
+        dest="cart_discount_cmd", required=True
+    )
+    cart_discount_list = cart_discount_subparsers.add_parser(
+        "list", help="List available discount vouchers"
+    )
+    cart_discount_list.set_defaults(func=list_discount_vouchers)
+
     return arg_parser
 
 
@@ -76,7 +87,15 @@ def main():
     kwargs: dict = {
         k: v
         for k, v in vars(args).items()
-        if k not in ("cmd", "auth_cmd", "func", "products_cmd", "cart_cmd")
+        if k
+        not in (
+            "cmd",
+            "auth_cmd",
+            "func",
+            "products_cmd",
+            "cart_cmd",
+            "cart_discount_cmd",
+        )
     }
     func(**kwargs)
 
@@ -331,6 +350,33 @@ def update_item_in_cart(product_id: int, quantity: int) -> None:
                 f"Updated quantity of product_id={product_id} to {row[0]} items",
                 f"in cart of user_id={user_id}",
             )
+
+
+def list_discount_vouchers() -> None:
+    """List available discount vouchers for currently logged in user."""
+    if (user_id := _get_logged_in_user_id()) is None:
+        print("WARNING: Cannot list discount vouchers. REASON: User is not logged in.")
+        return
+
+    with db_conn(DB_FILEPATH) as conn:
+        cursor: sqlite3.Cursor = conn.execute(
+            """
+            SELECT  voucher_id
+                ,   discount_percent
+            FROM    discount_vouchers
+            WHERE   user_id = :user_id
+            """,
+            {"user_id": user_id},
+        )
+
+        if not (rows := cursor.fetchall()):
+            print(f"There are no discount vouchers available for user_id={user_id}")
+        else:
+            print(
+                "=" * 33 + "\n" + "== Available Discount Vouchers ==\n" + "=" * 33,
+            )
+            for row in rows:
+                print(f"  - voucher_id={row[0]} | Discount={100*row[1]}%")
 
 
 if __name__ == "__main__":

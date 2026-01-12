@@ -169,6 +169,7 @@ def db_setup() -> None:
         populate_products_table(conn)
         create_active_carts_table(conn)
         create_discount_vouchers_table(conn)
+        populate_discount_vouchers_table(conn)
 
 
 if __name__ == "__main__":
