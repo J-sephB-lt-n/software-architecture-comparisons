@@ -127,7 +127,9 @@ def create_discount_vouchers_table(conn: sqlite3.Connection) -> None:
                         discount_percent >= 0.0
                     AND discount_percent <= 1.0
                 )
-            ,   is_valid    BOOLEAN
+            ,   status    TEXT CHECK(
+                    status IN ('AVAILABLE', 'ACTIVE', 'REDEEMED')
+                )
         )
         """
     )
@@ -137,12 +139,12 @@ def create_discount_vouchers_table(conn: sqlite3.Connection) -> None:
 def populate_discount_vouchers_table(conn: sqlite3.Connection) -> None:
     """Add some actual vouchers into the `discount_vouchers` table."""
     vouchers: list[tuple] = [
-        (1, 0.05, True),
-        (1, 0.3, True),
+        (1, 0.05, "AVAILABLE"),
+        (1, 0.3, "AVAILABLE"),
     ]
     conn.executemany(
         """
-        INSERT INTO discount_vouchers(user_id, discount_percent, is_valid)
+        INSERT INTO discount_vouchers(user_id, discount_percent, status)
         VALUES (?, ?, ?)
         """,
         vouchers,

@@ -363,6 +363,7 @@ def list_discount_vouchers() -> None:
             """
             SELECT  voucher_id
                 ,   discount_percent
+                ,   status
             FROM    discount_vouchers
             WHERE   user_id = :user_id
             """,
@@ -376,7 +377,17 @@ def list_discount_vouchers() -> None:
                 "=" * 33 + "\n" + "== Available Discount Vouchers ==\n" + "=" * 33,
             )
             for row in rows:
-                print(f"  - voucher_id={row[0]} | Discount={100*row[1]}%")
+                print(f"  - voucher_id={row[0]} | Discount={100*row[1]}% | {row[2]}")
+
+
+def apply_discount_voucher(voucher_id: int) -> None:
+    """Apply voucher `voucher_id` to active cart of currently logged in user."""
+    if (user_id := _get_logged_in_user_id()) is None:
+        print("WARNING: Cannot apply discount voucher. REASON: User is not logged in.")
+        return
+
+    with db_conn(DB_FILEPATH) as conn:
+        pass
 
 
 if __name__ == "__main__":
