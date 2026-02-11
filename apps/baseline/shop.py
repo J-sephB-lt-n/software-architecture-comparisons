@@ -387,7 +387,14 @@ def apply_discount_voucher(voucher_id: int) -> None:
         return
 
     with db_conn(DB_FILEPATH) as conn:
-        pass
+        cursor: sqlite3.Cursor = conn.execute(
+            """
+
+            """,
+            {
+                "user_id": user_id,
+            },
+        )
 
 
 if __name__ == "__main__":
